@@ -2,3 +2,4 @@
       - Tasks: Research any similar medical patient-doctor matcher, recommendation systems (at least 1 paper post-2023 & at least 1 video), public datasets (try NIH, UCI, CDC).
 5/3   - Progress: Found review of recommendation systems: https://arxiv.org/pdf/2306.12680
                   A video about basic recommendation systems: https://www.youtube.com/watch?v=Eeg1DEeWUjA
+                  A synthetic DB for patient data: https://synthetichealth.github.io/synthea/
