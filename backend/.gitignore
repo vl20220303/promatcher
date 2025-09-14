@@ -1,0 +1,5 @@
+synthea-with-dependencies.jar
+__pycache__
+synthea-data
+processed-data
+encoded-patients
