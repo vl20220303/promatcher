@@ -3,3 +3,6 @@ __pycache__
 synthea-data
 processed-data
 encoded-patients
+npi-data
+encoded-doctors
+.json

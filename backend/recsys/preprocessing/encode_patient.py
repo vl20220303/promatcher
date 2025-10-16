@@ -1,5 +1,4 @@
 import json
-import torch
 from datetime import datetime
 
 def compute_age(birthdate_str):
@@ -10,6 +9,8 @@ def compute_age(birthdate_str):
 def encode_patient(json_path, vocab_maps):
     with open(json_path) as f:
         data = json.load(f)
+
+    print(f'Processing patient {json_path}')
 
     #dense features
     age = compute_age(data["demographics"]["BIRTHDATE"])
@@ -25,6 +26,8 @@ def encode_patient(json_path, vocab_maps):
     condition_ids = [vocab_maps["conditions"].get(c["CODE"], 0) for c in data["conditions"]]
     medication_ids = [vocab_maps["medications"].get(m["CODE"], 0) for m in data["medications"]]
     procedure_ids = [vocab_maps["procedures"].get(p["CODE"], 0) for p in data["procedures"]]
+
+    print(f'Finished patient {json_path}')
 
     return {
         "patient_id": data["demographics"]["Id"],
