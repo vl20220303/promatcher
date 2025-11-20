@@ -5,4 +5,5 @@ processed-data
 encoded-patients
 npi-data
 encoded-doctors
-.json
+*.json
+*.csv

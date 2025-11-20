@@ -1,47 +1,70 @@
-import torch
+import json
+import os
+from pathlib import Path
 
-def flatten_patient(profile, condition_vocab_size):
-    cat = torch.tensor(profile["categorical"], dtype=torch.float)
-    dense = torch.tensor(profile.get("dense", []), dtype=torch.float)
+import pandas as pd
+from create_init_dataset import build_synthetic_dataset
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from load_dataset_helpers import build_feature_vector, load_doctor, load_patient
 
-    cond = torch.zeros(condition_vocab_size)
-    for idx in profile["multi_hot"].get("conditions", []):
-        cond[idx] = 1.0
+base_path = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+out_dir = Path(base_path / "matcher")
 
-    return torch.cat([dense, cat, cond])
+_vocab_path = base_path / "data" / "vocab_maps.json"
+if _vocab_path.exists():
+    with open(_vocab_path, "r", encoding="utf-8") as _f:
+        _VOCAB_MAPS = json.load(_f)
+else:
+    _VOCAB_MAPS = {}
+    print(f"{_vocab_path} not found")
+vocab_sizes = len(_VOCAB_MAPS.get("conditions", {}))
 
-def flatten_doctor(profile, condition_vocab_size, specialty_map=None, reverse_vocab=None):
-    cat = torch.tensor(profile["categorical"], dtype=torch.float)
+def train_init_model():
+    data_path = Path(base_path / "data/synthetic_pairs_by_patient/synthetic_pairs.csv")
 
-    accepted = profile["multi_hot"].get("conditions", [])
-    if not accepted and specialty_map and reverse_vocab:
-        specialty_id = profile["categorical"][1]
-        specialty_name = reverse_vocab["specialty"].get(specialty_id, "")
-        accepted = specialty_map.get(specialty_name, [])
-
-    cond = torch.zeros(condition_vocab_size)
-    for idx in accepted:
-        cond[idx] = 1.0
-
-    return torch.cat([cat, cond])
-
-import torch.nn.functional as F
-
-def compute_similarity(p_vec, d_vec, method="cosine"):
-    if method == "cosine":
-        return F.cosine_similarity(p_vec.unsqueeze(0), d_vec.unsqueeze(0)).item()
-    elif method == "dot":
-        return torch.dot(p_vec, d_vec).item()
-    else:
-        raise ValueError("Unsupported similarity method")
+    if not data_path.exists():
+        build_synthetic_dataset()
     
-def rank_doctors_for_patient(patient, doctors, condition_vocab_size, specialty_map=None, reverse_vocab=None, top_k=5):
-    p_vec = flatten_patient(patient, condition_vocab_size)
-    scores = []
-    for doc in doctors:
-        d_vec = flatten_doctor(doc, condition_vocab_size, specialty_map, reverse_vocab)
-        score = compute_similarity(p_vec, d_vec)
-        scores.append((doc["doctor_id"], score))
+    df = pd.read_csv(data_path)
 
-    ranked = sorted(scores, key=lambda x: -x[1])
-    return ranked[:top_k]
+    X = []
+    y = []
+
+    for _, row in df.iterrows():
+        p = load_patient(row["patient_id"])
+        d = load_doctor(row["doctor_id"])
+        features = build_feature_vector(p, d, vocab_sizes)
+        X.append(features)
+        y.append(row["label"])
+
+    model = xgb.XGBClassifier(
+        objective="binary:logistic",
+        eval_metric=["logloss", "auc"],
+        use_label_encoder=False
+    )
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    evals_result = {}
+    model.fit(
+        X_train, y_train,
+        eval_set=[(X_train, "train"), (X_val, "val")],
+        eval_metric=["logloss", "auc"],
+        early_stopping_rounds=10,
+        verbose=True,
+        evals_result=evals_result
+    )
+
+    print("Validation AUC:", evals_result["val"]["auc"][-1])
+    print("Validation Logloss:", evals_result["val"]["logloss"][-1])
+
+def incorporate_new_data(new_data):
+    data_path = Path(base_path / "data/real_pairs/real_pairs.csv")
+
+    if data_path.exists():
+        df = pd.read_csv(data_path)
+    else:
+        df = pd.DataFrame()
+
+train_init_model()
