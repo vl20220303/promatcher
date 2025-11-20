@@ -5,5 +5,7 @@ processed-data
 encoded-patients
 npi-data
 encoded-doctors
+synthetic_pairs_by_patient
+vocab_maps.json
 *.json
 *.csv
